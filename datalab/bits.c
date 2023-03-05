@@ -373,7 +373,28 @@ int howManyBits(int x) {//共77ops
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  // sign 31
+  // exp 30~23
+  // frac 22~0
+  const unsigned maskS = 0x80000000;
+  const unsigned maskExp = 0x7f800000;
+  const unsigned maskFrac = 0x7fffff;
+  const unsigned maxExp = 255;
+
+  unsigned result = 0;
+  unsigned s = uf & maskS;
+  unsigned exp = (uf & maskExp) >> 23;
+  unsigned frac = uf & maskFrac;
+  unsigned frac2 = frac + frac;
+
+  if (exp == maxExp) {// inf and NaN
+    result = uf;
+  } else if (exp == 0) {// denorm and 0
+    result = s + frac2;
+  } else { // norm 因为乘以2必定为偶数，最低位可以直接截断
+    result = s + ((exp + 1) << 23) + (frac2 >> 1);
+  }
+  return result;
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -388,7 +409,35 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  // sign 31
+  // exp 30~23
+  // frac 22~0
+  const unsigned maskS = 0x80000000;
+  const unsigned maskExp = 0x7f800000;
+  const unsigned maskFrac = 0x7fffff;
+  const int biasExp = 127;
+
+  int result = 0;
+  unsigned s = uf & maskS;
+  int exp = (uf & maskExp) >> 23;
+  int E = exp - biasExp;
+  unsigned frac = uf & maskFrac;
+  
+  if (E >= 31){// inf and NaN and too large
+    result = 0x80000000u;
+  } else {
+    if (E < 0) { // 值小于1
+      result = 0;
+    } else if (E <= 23) { // 值小于frac段长度时右移
+      result = (frac + 0x800000) >> (23 - E);
+    } else if (E < 31) { // 值大于frac段长度时左移
+      result = (frac + 0x800000) << (E - 23);
+    }
+    if (s) {// 符号位为1时转为负数
+      result = ~result + 1;
+    }
+  }
+  return result;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -404,5 +453,27 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  // sign 31
+  // exp 30~23
+  // frac 22~0
+  const unsigned f1 = 0x3f800000;
+  const unsigned INF = 0x7f800000;
+  const unsigned f2powMinE = 0x400000;
+  const int maxE = 128;
+  const int minE = -127;
+
+  unsigned result = 0;
+
+  if (x >= maxE) { // too large
+    result = INF;
+  } else if(x <= minE) { 
+    if (minE - x > 22) { // too small
+      result = 0;
+    } else { // denorm
+      result = f2powMinE >> (minE - x);
+    }
+  } else { // norm
+    result = ((f1 >> 23) + x) << 23;
+  }
+  return result;
 }
