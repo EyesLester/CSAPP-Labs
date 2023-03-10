@@ -40,7 +40,7 @@ while (%rdx) != 0 // %rdx所存地址指向的字符为非0
 
 ## phase_1
 
-给`%esi`赋值为0x402400，然后在`strings_not_equal`中比较`%rdi`和`%rsi`，结果为0（不相等）时不爆炸。
+给`%esi`赋值为0x402400，然后在`strings_not_equal`中比较`%rdi`和`%rsi`，结果为0（相等）时不爆炸。
 
 ```
 Breakpoint 1, 0x0000000000400ee4 in phase_1 ()
