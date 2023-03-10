@@ -1,4 +1,8 @@
-## 一些符号表说明
+**本文档用Typora编写**
+
+## 预备
+
+### 一些符号表说明
 
 | 符号名            | 内存位置 | 含义             |
 | ----------------- | -------- | ---------------- |
@@ -7,13 +11,13 @@
 
 
 
-## main
+### main
 
-每个phase前调用read_line读取一行字符串，存到`%rdi`里（由strings_not_equal函数推测得出），再调用phase的函数
+每个phase前调用read_line读取一行字符串，然后存到`%rdi`里（由strings_not_equal函数推测得出），再调用phase的函数
 
 
 
-## string_length函数
+### string_length函数
 
 ```
 %rdx = %rdi
@@ -28,7 +32,7 @@ while (%rdx) != 0 // %rdx所存地址指向的字符为非0
 
 
 
-## strings_not_equal函数
+### strings_not_equal函数
 
 给定两个字符串的起始地址`%rdi`和`%rsi`，当它们不同时返回`%rax=1`，否则返回`%rax=0`
 
@@ -671,3 +675,277 @@ rbx初始值为y~1~，然后依次变成y~2~, y~3~, y~4~, y~5~, y~6~，变成y~6
 所以y~1~到y~6~为以上顺序
 
 x~1~到 x~6~ 依次为**4 3 2 1 6 5**
+
+
+
+## 寻找secret_phase
+
+```assembly
+00000000004015c4 <phase_defused>:
+  4015c4:	48 83 ec 78          	sub    $0x78,%rsp
+  4015c8:	64 48 8b 04 25 28 00 	mov    %fs:0x28,%rax
+  4015cf:	00 00 
+  4015d1:	48 89 44 24 68       	mov    %rax,0x68(%rsp)
+  4015d6:	31 c0                	xor    %eax,%eax
+  4015d8:	83 3d 81 21 20 00 06 	cmpl   $0x6,0x202181(%rip)        # 603760 <num_input_strings>
+  4015df:	75 5e                	jne    40163f <phase_defused+0x7b># 输入字符串数目不为6则跳转
+  4015e1:	4c 8d 44 24 10       	lea    0x10(%rsp),%r8             # %r8 = M(%rsp + 16)
+  4015e6:	48 8d 4c 24 0c       	lea    0xc(%rsp),%rcx             # %rcx = M(%rsp + 12)
+  4015eb:	48 8d 54 24 08       	lea    0x8(%rsp),%rdx             # %rdx = M(%rsp + 8)
+  4015f0:	be 19 26 40 00       	mov    $0x402619,%esi             # "%d %d %s"
+  4015f5:	bf 70 38 60 00       	mov    $0x603870,%edi             # 603780+f0 <input_strings+240>
+  4015fa:	e8 f1 f5 ff ff       	call   400bf0 <__isoc99_sscanf@plt>
+  4015ff:	83 f8 03             	cmp    $0x3,%eax                  
+  401602:	75 31                	jne    401635 <phase_defused+0x71># sscanf没有解析到三个量则跳转
+  401604:	be 22 26 40 00       	mov    $0x402622,%esi             # "DrEvil"
+  401609:	48 8d 7c 24 10       	lea    0x10(%rsp),%rdi            # %rdi = M(%rsp+16) = sscanf解析到的字符串
+  40160e:	e8 25 fd ff ff       	call   401338 <strings_not_equal>
+  401613:	85 c0                	test   %eax,%eax
+  401615:	75 1e                	jne    401635 <phase_defused+0x71># sscanf解析到的字符串!="DrEvil"则跳转
+  401617:	bf f8 24 40 00       	mov    $0x4024f8,%edi # "Curses, you've found the secret phase!"
+  40161c:	e8 ef f4 ff ff       	call   400b10 <puts@plt>
+  401621:	bf 20 25 40 00       	mov    $0x402520,%edi # "But finding it and solving it are quite different..."
+  401626:	e8 e5 f4 ff ff       	call   400b10 <puts@plt>
+  40162b:	b8 00 00 00 00       	mov    $0x0,%eax
+  401630:	e8 0d fc ff ff       	call   401242 <secret_phase>
+  401635:	bf 58 25 40 00       	mov    $0x402558,%edi
+  40163a:	e8 d1 f4 ff ff       	call   400b10 <puts@plt>
+  40163f:	48 8b 44 24 68       	mov    0x68(%rsp),%rax
+  401644:	64 48 33 04 25 28 00 	xor    %fs:0x28,%rax
+  40164b:	00 00 
+  40164d:	74 05                	je     401654 <phase_defused+0x90>
+  40164f:	e8 dc f4 ff ff       	call   400b30 <__stack_chk_fail@plt>
+  401654:	48 83 c4 78          	add    $0x78,%rsp
+  401658:	c3                   	ret    
+```
+
+gdb检查发现输入的6个字符串存到了0x603780，0x6037d0，0x603820，0x603870，0x6038c0，0x603910中，
+
+0x603870是phase_4输入的密码''
+
+当已输入6个字符串（phase1到phase6通过），且phase_4输入的密码后面跟着字符串"DrEvil"时开启secret_phase
+
+所以解锁secret_phase只需把phase_4的密码由"7 0"改为"7 0 DrEvil"
+
+
+
+## secret_phase
+
+```assembly
+0000000000401242 <secret_phase>:
+  401242:	53                   	push   %rbx
+  401243:	e8 56 02 00 00       	call   40149e <read_line>       # 读取一行字符串到%rdi
+  401248:	ba 0a 00 00 00       	mov    $0xa,%edx                # %edx = 10
+  40124d:	be 00 00 00 00       	mov    $0x0,%esi                # %esi = 0
+  401252:	48 89 c7             	mov    %rax,%rdi                # %rdi = 字符串地址
+  401255:	e8 76 f9 ff ff       	call   400bd0 <strtol@plt>      # strtol将%rdi指向的字符串解析为8字节长的%edx进制整数
+  40125a:	48 89 c3             	mov    %rax,%rbx                # %rbx = strtol返回的整数
+  40125d:	8d 40 ff             	lea    -0x1(%rax),%eax          # %eax = strtol返回的整数 - 1
+  401260:	3d e8 03 00 00       	cmp    $0x3e8,%eax
+  401265:	76 05                	jbe    40126c <secret_phase+0x2a> # 0 <= %eax <= 1000则不爆炸
+  401267:	e8 ce 01 00 00       	call   40143a <explode_bomb>
+  40126c:	89 de                	mov    %ebx,%esi                # %esi = %ebx = strtol返回的整数的低4字节
+  40126e:	bf f0 30 60 00       	mov    $0x6030f0,%edi           # %edi = 0x6030f0
+  401273:	e8 8c ff ff ff       	call   401204 <fun7>            # 调用func7
+  401278:	83 f8 02             	cmp    $0x2,%eax
+  40127b:	74 05                	je     401282 <secret_phase+0x40> # %eax == 2则不爆炸
+  40127d:	e8 b8 01 00 00       	call   40143a <explode_bomb>
+  401282:	bf 38 24 40 00       	mov    $0x402438,%edi           # "Wow! You've defused the secret stage!"
+  401287:	e8 84 f8 ff ff       	call   400b10 <puts@plt>
+  40128c:	e8 33 03 00 00       	call   4015c4 <phase_defused>
+  401291:	5b                   	pop    %rbx
+  401292:	c3                   	ret    
+```
+
+首先读取一行字符串并解析为10进制整数x，要满足 0 <= x - 1 <= 1000
+
+调用func7的返回值rax要恰好等于2
+
+
+
+### 附func7
+
+```assembly
+0000000000401204 <fun7>:
+.L1:
+  401204:	48 83 ec 08          	sub    $0x8,%rsp
+  401208:	48 85 ff             	test   %rdi,%rdi
+  40120b:	74 2b                	je     401238 <fun7+0x34>    # %rdi == 0则跳转到L3
+  40120d:	8b 17                	mov    (%rdi),%edx           # %edx = M(%rdi)
+  40120f:	39 f2                	cmp    %esi,%edx
+  401211:	7e 0d                	jle    401220 <fun7+0x1c>    # %edx <= %esi则跳转到L2
+  401213:	48 8b 7f 08          	mov    0x8(%rdi),%rdi        # %rdi = M(%rdi + 8)
+  401217:	e8 e8 ff ff ff       	call   401204 <fun7>         # 调用fun7
+  40121c:	01 c0                	add    %eax,%eax             # %eax = 2 * %eax  
+  40121e:	eb 1d                	jmp    40123d <fun7+0x39>    # 跳转到L4
+.L2
+  401220:	b8 00 00 00 00       	mov    $0x0,%eax             # %eax = 0
+  401225:	39 f2                	cmp    %esi,%edx
+  401227:	74 14                	je     40123d <fun7+0x39>    # %edx == %esi则跳转到L4
+  401229:	48 8b 7f 10          	mov    0x10(%rdi),%rdi       # %rdi = M(%rdi + 16)
+  40122d:	e8 d2 ff ff ff       	call   401204 <fun7>         # 调用fun7
+  401232:	8d 44 00 01          	lea    0x1(%rax,%rax,1),%eax # %eax = 2 * %rax + 1
+  401236:	eb 05                	jmp    40123d <fun7+0x39>    # 跳转到L4
+.L3  
+  401238:	b8 ff ff ff ff       	mov    $0xffffffff,%eax     # %eax = 0xffffffff
+.L4
+  40123d:	48 83 c4 08          	add    $0x8,%rsp            # 结束
+  401241:	c3                   	ret    
+```
+
+逻辑如下
+
+```pseudocode
+func7(rdi, rsi) {
+	// .L1
+	if (rdi == 0) then {
+		//.L3
+		eax = 0xffffffff
+	} else {
+		if (M(rdi) > esi) then {
+            rdi = M(rdi + 8)
+            fun7(rdi, rsi)
+            eax = 2 * eax
+         } else {
+        	//.L2
+            eax = 0
+            if (M(rdi) != esi) then {
+            	rdi = M(rdi + 16)
+            	fun7(rdi, rsi)
+            	eax = 2 * rax + 1
+            }
+         }
+	}
+	//.L4
+	return
+}
+```
+
+转成C代码
+
+```c
+// x代表rdi, y代表rs, 第一次调用为func7(0x6030f0, 输入的密码)
+__int64 func7(__int64 *x, __int64 *y){
+    __int64 res;
+    if (x == 0) res = 0xffffffff;
+    if (*x > y) {
+        x = *(x + 8);
+        res = 2 * fun7(x, y); // y不变
+    } else if (*x < y) {
+        x = *(x + 16);
+        res = 2 * fun7(x, y) + 1;
+    } else {
+        res = 0;
+    }
+    return res;
+}
+```
+
+查gdb得到
+
+```assembly
+0x6030f0 <n1>:  		0x0000000000000024      0x0000000000603110
+0x603100 <n1+16>:       0x0000000000603130      0x0000000000000000
+
+0x603110 <n21>: 		0x0000000000000008      0x0000000000603190
+0x603120 <n21+16>:      0x0000000000603150      0x0000000000000000
+
+0x603130 <n22>: 		0x0000000000000032      0x0000000000603170
+0x603140 <n22+16>:      0x00000000006031b0      0x0000000000000000
+
+0x603150 <n32>: 		0x0000000000000016      0x0000000000603270
+0x603160 <n32+16>:      0x0000000000603230      0x0000000000000000
+
+0x603170 <n33>: 		0x000000000000002d      0x00000000006031d0
+0x603180 <n33+16>:      0x0000000000603290      0x0000000000000000
+
+0x603190 <n31>: 		0x0000000000000006      0x00000000006031f0
+0x6031a0 <n31+16>:      0x0000000000603250      0x0000000000000000
+
+0x6031b0 <n34>: 		0x000000000000006b      0x0000000000603210
+0x6031c0 <n34+16>:      0x00000000006032b0      0x0000000000000000
+
+0x6031d0 <n45>: 		0x0000000000000028      0x0000000000000000
+0x6031e0 <n45+16>:      0x0000000000000000      0x0000000000000000
+
+0x6031f0 <n41>: 		0x0000000000000001      0x0000000000000000
+0x603200 <n41+16>:      0x0000000000000000      0x0000000000000000
+
+0x603210 <n47>: 		0x0000000000000063      0x0000000000000000
+0x603220 <n47+16>:      0x0000000000000000      0x0000000000000000
+
+0x603230 <n44>: 		0x0000000000000023      0x0000000000000000
+0x603240 <n44+16>:      0x0000000000000000      0x0000000000000000
+
+0x603250 <n42>: 		0x0000000000000007      0x0000000000000000
+0x603260 <n42+16>:      0x0000000000000000      0x0000000000000000
+
+0x603270 <n43>: 		0x0000000000000014      0x0000000000000000
+0x603280 <n43+16>:      0x0000000000000000      0x0000000000000000
+
+0x603290 <n46>: 		0x000000000000002f      0x0000000000000000
+0x6032a0 <n46+16>:      0x0000000000000000      0x0000000000000000
+
+0x6032b0 <n48>: 		0x00000000000003e9      0x0000000000000000
+0x6032c0 <n48+16>:      0x0000000000000000      0x0000000000000000
+```
+
+以0x6030f0 \<n1\>为例，它有三个8字节长的变量，第一个是数字0x24，第二三个是指针0x603110和0x603130
+
+考虑x为指向结构体的指针，C代码转换成
+
+```c
+typedef struct{
+    __int64 num;
+    node *p1;
+    node *p2;
+} node;
+__int64 func7(node *x, __int64 *y){
+    __int64 res;
+    if (x == 0) res = 0xffffffff;
+    if (y < x.num) {
+        x = x.p1;
+        res = 2 * fun7(x, y); // y不变
+    } else if (y > x.num) {
+        x = x.p2;
+        res = 2 * fun7(x, y) + 1;
+    } else {
+        res = 0;
+    }
+    return res;
+}
+```
+
+内存中的数据显然是二叉树，将数据绘制成图，发现是一颗二叉搜索树
+
+```mermaid
+graph TD;
+   n1((36)) --> n21
+   n1 --> n22
+   n21((8)) --> n31
+   n21 --> n32
+   n22((50)) --> n33
+   n22 --> n34
+   n32((22)) --> n43
+   n32 --> n44
+   n33((45)) --> n45
+   n33 --> n46
+   n31((6)) --> n41
+   n31 --> n42
+   n34((107)) --> n47
+   n34 --> n48
+   n45((40))
+   n41((1))
+   n47((99))
+   n44((35))
+   n42((7))
+   n43((20))
+   n46((47))
+   n48((1001))
+```
+
+func7的作用是：从上面的二叉搜索树中搜索y，找到y之后递归向上移动到根节点，初始res为0，如果当前节点是父节点的左子节点则res = 2 * res，如果是右子节点则res = 2 * res + 1
+
+最终要使res == 2，所以递归深度为1时只能为res == 1左子节点，递归深度为2时只能为res == 0右子节点，递归深度为3时只能为res == 0左子节点，即y == 20（实际上就是搜索到的节点从底层往高层从左到右依次的res为0~14）
+
+所以secret_phase的密码是 **20**
