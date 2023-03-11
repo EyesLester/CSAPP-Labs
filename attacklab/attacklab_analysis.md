@@ -281,7 +281,7 @@ gadget1_1的位置是
   4019e0:	c3                   	ret    
     
            	89 c2               	movl   %eax,%edx # 4019dd
-           	90               	    nop
+           	90                  	nop
 ```
 
 gadget1_2的位置是
@@ -291,7 +291,7 @@ gadget1_2的位置是
   401a68:	b8 89 d1 08 db       	mov    $0xdb08d189,%eax
   401a6d:	c3                   	ret    
            	89 d1               	movl   %edx,%ecx # 401a69
-           	08 db              	    orb    %bl,%bl
+           	08 db               	orb    %bl,%bl
 ```
 
 gadget1_3的位置是
@@ -301,8 +301,8 @@ gadget1_3的位置是
   401a11:	8d 87 89 ce 90 90    	lea    -0x6f6f3177(%rdi),%eax
   401a17:	c3                   	ret 
            	89 ce               	movl   %ecx,%esi # 401a13
-           	90                 	    nop
-            90                 	    nop
+           	90                  	nop
+           	90                  	nop
 ```
 
 gadget2的位置是
